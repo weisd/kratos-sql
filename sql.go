@@ -198,6 +198,40 @@ func (db *DB) QueryRowContext(ctx context.Context, query string, args ...interfa
 	return db.QueryRow(ctx, query, args)
 }
 
+// PrepareContext creates a prepared statement for use within a transaction.
+// The returned statement operates within the transaction and can no longer be
+// used once the transaction has been committed or rolled back.
+// To use an existing prepared statement on this transaction, see Tx.Stmt.
+func (tx *Tx) PrepareContext(ctx context.Context, query string) (*Stmt, error) {
+	if tx.t != nil {
+		tx.t.SetTag(trace.String(trace.TagAnnotation, fmt.Sprintf("prepare %s", query)))
+	}
+	defer slowLog(fmt.Sprintf("Prepare query(%s)", query), time.Now())
+	stmt, err := tx.tx.PrepareContext(ctx, query)
+	if err != nil {
+		err = errors.Wrapf(err, "prepare %s", query)
+		return nil, err
+	}
+	st := &Stmt{query: query, tx: true, t: tx.t, db: tx.db}
+	st.stmt.Store(stmt)
+	return st, nil
+}
+
+// ExecContext ExecContext
+func (tx *Tx) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	return tx.Exec(query, args)
+}
+
+// QueryContext QueryContext
+func (tx *Tx) QueryContext(ctx context.Context, query string, args ...interface{}) (*Rows, error) {
+	return tx.Query(query, args)
+}
+
+// QueryRowContext QueryRowContext
+func (tx *Tx) QueryRowContext(ctx context.Context, query string, args ...interface{}) *Row {
+	return tx.QueryRow(query, args)
+}
+
 // Prepare creates a prepared statement for later queries or executions.
 // Multiple queries or executions may be run concurrently from the returned
 // statement. The caller must call the statement's Close method when the
