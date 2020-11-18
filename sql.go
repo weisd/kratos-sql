@@ -178,6 +178,26 @@ func (db *DB) Exec(c context.Context, query string, args ...interface{}) (res sq
 	return db.write.exec(c, query, args...)
 }
 
+// PrepareContext PrepareContext
+func (db *DB) PrepareContext(ctx context.Context, query string) (*Stmt, error) {
+	return db.write.prepareContext(ctx, query)
+}
+
+// ExecContext ExecContext
+func (db *DB) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	return db.Exec(ctx, query, args)
+}
+
+// QueryContext QueryContext
+func (db *DB) QueryContext(ctx context.Context, query string, args ...interface{}) (*Rows, error) {
+	return db.Query(ctx, query, args)
+}
+
+// QueryRowContext QueryRowContext
+func (db *DB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *Row {
+	return db.QueryRow(ctx, query, args)
+}
+
 // Prepare creates a prepared statement for later queries or executions.
 // Multiple queries or executions may be run concurrently from the returned
 // statement. The caller must call the statement's Close method when the
@@ -349,6 +369,18 @@ func (db *conn) ping(c context.Context) (err error) {
 func (db *conn) prepare(query string) (*Stmt, error) {
 	defer slowLog(fmt.Sprintf("Prepare query(%s)", query), time.Now())
 	stmt, err := db.Prepare(query)
+	if err != nil {
+		err = errors.Wrapf(err, "prepare %s", query)
+		return nil, err
+	}
+	st := &Stmt{query: query, db: db}
+	st.stmt.Store(stmt)
+	return st, nil
+}
+
+func (db *conn) prepareContext(ctx context.Context, query string) (*Stmt, error) {
+	defer slowLog(fmt.Sprintf("Prepare query(%s)", query), time.Now())
+	stmt, err := db.PrepareContext(ctx, query)
 	if err != nil {
 		err = errors.Wrapf(err, "prepare %s", query)
 		return nil, err
